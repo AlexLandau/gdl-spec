@@ -1,0 +1,924 @@
+<html>
+<head>
+<title>General Game Playing: Game Description Language Specification</title>
+</head>
+<body>
+
+<h1>General Game Playing:<br/>
+Game Description Language Specification</h1>
+
+<h3>Nathaniel Love, Timothy Hinrichs, David Haley, Eric Schkufza, Michael Genesereth</h3>
+
+<h3>March 4, 2008</h3>
+
+<p>Stanford Logic Group<br/>
+Computer Science Department<br/>
+Stanford University<br/>
+353 Serra Mall<br/>
+Stanford, CA 94305<br/>
+{nlove,thinrich,dhaley,eschkufz,genesereth}@cs.stanford.edu</p>
+
+<h2>1 Introduction</h2>
+
+<p>The specification in this document covers the class of games used for General Game Playing on Stanford's
+General Game Playing (GGP) test bed, and in the AAAI GGP Competitions: <i>finite, discrete, deterministic
+multi-player games of complete information</i>. This document begins by describing the mathematical models
+underlying general game playing and gives the specification for the game description language. The document
+follows with a description of the GGP game manager and the exchange of messages that constitute game
+play, along with a specification for the game communication language.</p>
+
+<h2>2 General Game Playing</h2>
+
+<p>The General Game Playing test bed, <i>Gamemaster</i>, consists of an online Game Manager (GM) supporting
+multiple remote General Game Playing systems connecting over the web, playing <i>general games</i>: games with
+rules <i>unknown</i> to the players in advance, described in a <i>known</i> logical Game Description Language.</p>
+
+<p>The GM has many games available for play, each described by rules in a logical Game Description
+Language. When a game is initiated by remote GGP systems, the GM sends each player the game description;
+shortly afterwards, the game begins, as the GM notifies the players that a turn has begun. The players submit
+their moves back to the GM, which tracks the state of the game (checking the goal conditions and verifying
+legal moves), and notifies players of the next turn, sending them information about their opponents' most
+recent moves so that the players can themselves update their own knowledge of the game state. When the
+game terminates, as dictated by the rules of the game, the GM records the winning players of the game.</p>
+
+<h2>3 Modeling General Games</h2>
+
+<p>The natural underlying model of environment, percepts and actions in a finite, discrete, deterministic multiplayer
+games is a finite state machine. Given a finite environment with deterministic dynamics, a unique
+state can be created in a state machine for each distinct state of the environment, with outgoing arcs labeled
+with the joint moves of all players interacting with the system, and with percepts for each player interacting
+with the system. Since the number of players and their sets of possible percepts are all finite, the environment
+of the game world is representable as a finite state machine.</p>
+
+<p>While the state machine formalism can represent multi-player game worlds and their dynamics, it presents
+problems when used for General Game Playing. Specifically, the size of a state machine representation is
+impractical for direct use in reasoning, and in many cases may be too large to store in memory or practically
+communicate to an agent at all. Both the monolithic representation of states and of player actions contribute
+to these problems, and complex rules for goals and legality increase this cost further. For example, a state
+machine representation of Chess requires over 10<sup>28</sup> distinct states.</p>
+
+<p>A further drawback of the state machine representation is the lack of modularity that accompanies the
+monolithic states and actions. The entire dynamics of the game world must be encoded in the transition
+function of the state machine, which makes no distinction between changes resulting from each player's
+actions (or even particular combinations of player moves) and those made by the inherent physics of the
+game.</p>
+
+<p>In order to efficiently perform reasoning tasks necessary for General Game Playing, a compact, modular
+representation for the game world and its dynamics is needed. GDL (Game Description Language) has been
+developed to satisfy this need.</p>
+
+<h2>4 GDL</h2>
+
+<p>GDL describes the state of a game world in terms of a set of true facts. The transition function between
+states &ndash; the rules of the game &ndash; are described using logical rules in GDL that define the set of facts true in
+the next state in terms of the current state and the moves of all of the players. GDL contains constructs for
+distinguishing the initial state of the game, as well as goal states and terminal states. In this way, a game
+description in GDL defines a state machine satisfying the modeling requirements detailed in the previous
+section. Additionally, certain player moves are deemed legal depending on the state. Logical rules are also
+used to describe the legal move definitions, the termination conditions, and the goal conditions.</p>
+
+<p>Given a game description in GDL, a GGP player can compute the set of facts true in the initial state of
+the game. Given that set of facts and the moves made by all players in the game, the GDL game description
+completely defines the set of facts true in the next state of the game. The game description, along with the
+set of facts currently true, also completely defines the current set of legal moves for each player, and defines
+whether the game state is terminal, and if so, what the goal values are for the players.</p>
+
+<p>The following two sections define the syntax and semantics of GDL. Section 5 describes GDL as a variant
+of the Datalog language. Section 6 details the distinguished relations in GDL that are used to describe
+the components of the state machine model: <i>role, init, true, does, next, legal, goal,</i> and <i>terminal</i>. The use
+of these terms within a GDL game description is restricted in order to ensure that each game description
+corresponds to a state machine; section 6 defines these restrictions.</p>
+
+<h2>5 GDL and Datalog</h2>
+
+<p>The Game Description Language is a variant of Datalog that allows function constants, negation, and
+recursion. In GDL, a state of the game is defined by the set of propositions true in that state. The transition
+function between states &ndash; the rules of the game &ndash; are described using Datalog rules. These rules define the
+resulting state given the current state and the moves of all the players. Together with the initial state, the
+transition function defines a state machine satisfying the modeling requirements detailed in the previous
+section.</p>
+
+<p>Additionally, certain player moves are deemed <i>legal</i> depending on the state. In certain states, the game
+terminates, and in those states each player is assigned a score. Datalog rules are also used to describe the
+legal move definitions, the termination conditions, and the goal conditions.</p>
+
+<p>To be precise, GDL is <i>datalog</i>&not; with function constants, along with a set of distinguished relational
+predicates. The syntax and semantics of <i>datalog</i>&not; are described below, followed by the additional features
+GDL includes.</p>
+
+<h3>5.1 Syntax of <i>datalog</i>&not;</h3>
+
+<p>The vocabulary, or signature, of a language is the set of building blocks from which sentences are formed.</p>
+
+<p><b>Definition 1</b> (Vocabulary). <i>A vocabulary consists of</i>
+<ul><li><i>A set of relation constants with associated arity, e.g. adjacent, on.</i></li>
+    <li><i>A set of object constants, e.g. a, b, c</i></li>
+</ul>
+A <i>variable</i> is any symbol that starts with a capital letter.</p>
+
+<p><b>Definition 2</b> (Term). <i>A term is</i>
+<ul><li><i>A variable</i></li>
+    <li><i>An object constant</i></li>
+</ul>
+Atomic sentences and literals are defined as is usual.</p>
+
+<p><b>Definition 3</b> (Atomic Sentence). <i>An atomic sentence is a relation constant of arity n applied to n terms,
+e.g. p(1, 1, X).</i></p>
+
+<p><b>Definition 4</b> (Literal). <i>A literal is an atomic sentence or the negation of an atomic sentence, e.g. p(1, 1, X)
+or &not;p(1, 1, X).</i></p>
+
+<p><b>Definition 5</b> (Ground Expression). <i>An expression is ground if and only if it contains no variables.</i></p>
+
+<p>Datalog rules are implications where the head of the rule is always an atomic sentence. The body of the
+rule contains zero or more literals, with some special constraints on the negative literals.</p>
+
+<p><b>Definition 6</b> (Datalog Rule). <i>A datalog rule is an implication of the form</i></p>
+<center><i>h &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub></i></center>
+<ul><li><i>The head, h, is an atomic sentence.</i></li>
+    <li><i>Each literal in the body, b<sub>i</sub>, is a literal.</i></li>
+    <li><i>Safety: if a variable appears in the head or in a negative literal, it must appear in a positive literal in
+the body.</i></li>
+</ul>
+
+<p>The next section discusses why the last constraint exists; partly it exists to deal with negation. Datalog
+treats negation using negation as failure, which can cause problems; to avoid those problems, Datalog rules
+with negation must be <i>stratified</i>. A set of Datalog Rules is stratified if when starting from some relation
+constant <i>p</i> one can never reach &not;<i>p</i> by following the rules backwards. For example, neither of the following
+two sets of rules are stratified.</p>
+
+<ul><li><i>p(X) &lArr; q(X) &and; &not;p(X)</i></li>
+    <li><i>p(X) &lArr; q(X)<br/>
+           q(X) &lArr; r(X) &and; &not;p(X))</i></li>
+</ul>
+
+<p>Stratification is defined in terms of a dependency graph.</p>
+
+<p><b>Definition 7</b> (Dependency Graph). <i>Let &Delta; be a set of Datalog rules. The nodes of the dependency graph
+for &Delta; are the relation constants in the vocabulary. There is an edge from r<sub>2</sub> to r<sub>1</sub> whenever there is a rule
+with r<sub>1</sub> in the head and r<sub>2</sub> in the body. That edge is labeled with &not; whenever r<sub>2</sub> is in a negative literal.</i></p>
+
+<p><b>Definition 8</b> (Stratified Datalog Rules). <i>A set of Datalog rules is stratified if and only if there are no cycles
+that include an edge labeled with &not; in the dependency graph for that rule set.</i></p>
+
+<p>In the second example above, there would be an edge from <i>q</i> to <i>p</i> without a label and an edge from <i>r</i> to
+<i>q</i> without a label and an edge from <i>p</i> to <i>q</i> with a &not; label. Those two sentences are not stratified since the
+cycle <i>p</i> to <i>q</i> to <i>p</i> includes an edge labeled &not;.</p>
+
+<h3>5.2 Semantics of <i>datalog</i>&not;</h3>
+
+<p>The meaning, or semantics, of a particular set of <i>datalog</i>&not; rules is based on the models that satisfy those
+rules.</p>
+
+<p><b>Definition 9</b> (Model). <i>A model for language L is a set of ground atomic sentences in L.</i></p>
+
+<p>Variables in Datalog range over all the ground terms in the language. Thus assuming the object constants
+in the vocabulary are a, b, and c, p(X) means all the following are true. p(a), p(b), p(c). Consequently, for
+the purpose of defining satisfaction, we can assume explicit universal quantifiers have been added so that
+every variable in a Datalog rule is captured, e.g. p(X, Y) is treated as &forall;XY.p(X, Y).</p>
+
+<p><b>Definition 10</b> (Satisfaction). <i>Let M be a model, and let the sentence in question be an explicitly universally
+quantified Datalog rule.</i></p>
+<ul><li><i>&#8872;<sub>M</sub> t<sub>1</sub> = t<sub>2</sub> if and only if t<sub>1</sub> and t<sub>2</sub> are the same term, syntactically.</i></li>
+    <li><i>&#8872;<sub>M</sub> p(t<sub>1</sub>, . . . , t<sub>n</sub>) if and only if p(t<sub>1</sub>, . . . , t<sub>n</sub>) &isin; M</i></li>
+    <li><i>&#8872;<sub>M</sub> &not;&#981; if and only if &#8877;<sub>M</sub> &#981;</i></li>
+    <li><i>&#8872;<sub>M</sub> &#981;<sub>1</sub> &and; &middot; &middot; &middot; &and; &#981;<sub>n</sub> if and only if &#8872;<sub>M</sub> &#981;<sub>i</sub> for every i.</i></li>
+    <li><i>&#8872;<sub>M</sub> h &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub> if and only if either &#8877;<sub>M</sub> b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub> or &#8872;<sub>M</sub> h or both.</i></li>
+    <li><i>&#8872;<sub>M</sub> &forall;X.&#981;(X) if and only if &#8872;<sub>M</sub> &#981;(t) for every ground term t.</i></li>
+</ul>
+<p>It is well known that when a set of Datalog rules contains no negation, i.e. the set is Horn, there is a
+unique minimal model that satisfies that set. Model M is smaller than model N exactly when M &sub; N. In
+Datalog without negation, that smallest model is the meaning of the set of rules.</p>
+
+<p><b>Definition 11</b> (Entailment). <i>Let &Delta; be a set of Datalog rules without negation. Let M be the smallest model
+that satisfies &Delta;.</i></p>
+<center><i>&Delta; &#8872; &#981; if and only if &#8872;<sub>M</sub> &#981;</i></center>
+
+<p>Adding negation complicates the definition of the semantics, but when a set of Datalog rules with negation
+is stratified, it turns out there is always a single model that can be uniquely identified&mdash;that model is the
+meaning of the set of stratified Datalog rules. It can be identified by constructively extending the minimal
+model of the negation-free portion of the rules.</p>
+
+<p>Recall that the test for stratification involved constructing a dependency graph for the set of rules. This
+graph helps us construct the semantics of that set.</p>
+
+<p><b>Definition 12</b> (Stratum). <i>Let &Delta; be a set of Stratified Datalog rules, and consider the dependency graph for
+&Delta;. We say that the relation constant r is in stratum i if and only if the maximum number of &not; arcs on any
+path starting at r is i. A rule whose head includes a relation constant in stratum i is said to be a rule in
+stratum i itself.</i></p>
+
+<p>It turns out that every rule in a set of Stratified Datalog rules belongs to a finite stratum, and there is at
+least one rule in stratum 0. All rules in stratum 0 have no negation; thus, they are Horn and have a unique
+minimal model M<sub>0</sub>. The Stratified Datalog semantics starts with that model and extends it by adding all
+the consequences of rules in stratum 1 by evaluating the negative literals of each such rule in M<sub>0</sub>. Then that
+model, M<sub>1</sub>, is extended to M<sub>2</sub> by repeating the process with the rules in stratum 2, and so on.</p>
+
+<p><b>Definition 13</b> (Stratified Datalog Semantics). <i>Let &Delta; be a set of stratified Datalog rules. Let M<sub>0</sub> be the
+minimal model that satisfies all the rules in stratum 0. To compute M<sub>i</sub>, where i > 0, initialize M<sub>i</sub> to M<sub>i&minus;1</sub>.
+Perform the following operations, adding the result to M<sub>i</sub> until no changes occur.</i></p>
+<ul><li><i>Let h &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub> be a rule in stratum i.</i></li>
+    <li><i>For each substitution &sigma; such that &#8872;<sub>M<sub>i</sub></sub> (b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub>)&sigma;, output h&sigma;.</i></li>
+</ul>
+<p><i>Let k be the largest stratum for any rule in &Delta;. The Stratified Datalog semantics of &Delta; is M<sub>k</sub>.</i></p>
+
+<p><b>Definition 14</b> (Stratified Entailment). <i>Let &Delta; be a set of Stratified Datalog rules. Let M be the Stratified
+Datalog semantics for &Delta;.</i></p>
+<center><i>&Delta; &#8872; &#981; if and only if &#8872;<sub>M</sub> &#981;</i></center>
+<p>The definition of <i>datalog</i>&not; rules includes a statement that says for an implication to be a <i>datalog</i>&not; rule,
+it must obey the following constraint: if a variable appears in the head of the rule or a variable appears in
+a negative literal, that variable must also appear in a positive literal in the body. Now that the semantics
+have been defined, the reason for this constraint can be explained.</p>
+
+<p>Suppose we were to write a rule with a variable in the head that does not occur in the body or a rule
+with a variable in a negative literal that does not occur in a positive literal.</p>
+<center><i>p(X, Y) &lArr; q(X)</i></center>
+<center><i>s(a) &lArr; &not;r(Y)</i></center>
+<p>In the first case, suppose q(a) is true. Then p(a, X) is also true. In <i>datalog</i>&not;, the vocabulary is often assumed
+to include infinitely many object constants. With infinitely many object constants, there are infinitely many
+consequences of q(a):</p>
+<center><i>p(a, a), p(a, b), p(a, c), p(a, d), . . .</i></center>
+<p>That is, the model defined by the Datalog semantics is infinitely large. The constraint above removes this
+possibility by forcing every variable in the head of the rule to occur in a positive literal in the body. This
+condition is sufficient to ensure that a finite set of rules always has a finite model as its semantics.</p>
+
+<p>In the second rule above, it is unclear how to interpret what the rule is supposed to mean. Does it mean
+that if there is some Y for which r is false that s(a) is true? Or does it mean that if r(t) for every ground
+term t is false that s(a) is true? The constraint on Datalog rules removes this ambiguity by requiring every
+variable in a negative literal to also occur in a positive literal in the body; by first evaluating the positive
+literal, every negative literal can be ground before evaluating it with negation as failure.</p>
+
+<p>It is noteworthy that as a consequence of these semantics, Datalog includes the Unique Names Assumption
+(UNA) and a Domain Closure Assumption (DCA). The UNA says every pair of terms that look different are
+unequal, and the DCA says that the only objects in the universe are those named by ground terms.</p>
+
+<h3>5.3 Differences from <i>datalog</i>&not;</h3>
+
+<p>GDL builds directly on top of Datalog by making a small change having to do with equality, the inclusion
+of function constants, and adding a restriction on recursion that ensures finiteness of the semantics, which
+is required because of the presence of function constants.</p>
+
+<p>Recall that in <i>datalog</i>&not;, two ground terms are equal exactly when they are the same exact term, e.g.
+a = a but a &ne; b. Whereas <i>datalog</i>&not; includes equality directly allowing for both = testing and &ne; testing,
+GDL only builds in a test for &ne; using the relation <i>distinct</i>. The rationale is that any test such as X = Y
+can be built into a rule by replacing all occurrences of X with Y or vice versa. Alternatively, by including a
+rule such as equal(Z, Z), the equality check X = Y can be written as equal(X, Y). Building <code>distinct</code> into
+the language is useful because encoding a relation for all unequal terms can be cumbersome.</p>
+
+<p>As noted earlier, GDL is a language for describing finite state machines: it encodes an initial state and
+a transition function. Computing the transition function in a finite state machine is always decidable, and
+the output is always one of finitely many states; GDL should have similar properties.</p>
+
+<p>As we shall see shortly, in GDL computing the transition function amounts to asking for all answers
+to a particular query about a game description. If GDL is to restrict games to a finite set of states and
+decidable transition functions, the result of this query must be finite and computing that result must always
+be decidable.</p>
+
+<p>Unfortunately, in general, answering a Datalog query with recursion and function constants is formally
+undecidable. It is also possible that the number of answers to such a Datalog query is infinite. All is not lost.
+Several options exist for addressing these issues. Remove recursion and both problems disappear; remove
+function constants and both problems disappear. However, both these options make writing some games
+more cumbersome than necessary.</p>
+
+<p>For that reason, we impose a syntactic restriction on the combination of function symbols and recursion
+in rules that is sufficient to ensure finiteness and decidability in all cases.</p>
+
+<p><b>Definition 15</b> (Recursion Restriction). <i>Let &Delta; be a set of rules, and let G be the dependency graph of &Delta;.
+Suppose that &Delta; contains the rule</i></p>
+<center><i>p(t<sub>1</sub>, . . . t<sub>n</sub>) &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; q(v<sub>1</sub>, . . . , v<sub>k</sub>) &and; &middot; &middot; &middot; &and; b<sub>m</sub></i></center>
+<p><i>where q appears in a cycle with p in G. Then &forall;j &isin; {1, . . . , k}, either v<sub>j</sub> is ground, v<sub>j</sub> &isin; {t<sub>1</sub>, . . . , t<sub>n</sub>}, or
+&exist;i&isin;{1,...,m}.b<sub>i</sub> = r(. . . , v<sub>j</sub> , . . .), where r does not appear in a cycle with p.</i></p>
+
+<p>Essentially, this restriction ensures that functional terms cannot "grow" to unbounded size by use of
+recursive rules, since terms can only be passed along a recursive cycle without adding function symbols, and
+new terms introduced into recursive cycles must be grounded by a finite set of base relation sentences.</p>
+
+<p>Below we summarize how the core of GDL differs from <i>datalog</i>&not; by altering the definitions to produce
+GDL, with changes denoted in bold (mathematical symbols surrounded by bold text are also new). The
+only remaining differences are the distinguished relation constants used to define a FSM with the variant of
+Datalog just described.</p>
+
+<p><b>Definition 16</b> (Vocabulary). <i>A vocabulary consists of</i></p>
+<ul><li><i>A set of relation constants with associated arity, e.g. adjacent, on.</i></li>
+    <li><i><b>A set of function constants with associated arity, e.g.</b> f, g, h</i></li>
+    <li><i>A set of object constants, e.g. a, b, c</i></li>
+</ul>
+
+<p><b>Definition 17</b> (Term). <i>A term is</i></p>
+<ul><li><i>A variable</i></li>
+    <li><i>An object constant</i></li>
+    <li><i><b>A function constant of arity n applied to n terms, e.g.</b> f(a, X, g(h(c, Y ), e))</i></li>
+</ul>
+
+<p><b>Definition 18</b> (Datalog Rule). <i>A datalog rule is an implication of the form</i></p>
+<center><i>h &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub></i></center>
+<ul><li><i>The head, h, is an atomic sentence.</i></li>
+    <li><i>Each literal in the body, b<sub>i</sub>, is a literal.</i></li>
+    <li><i><b>The Recursion Restriction given above must be satisfied.</b></i></li>
+</ul>
+
+<p><b>Definition 19</b> (Satisfaction). <i>Let M be a model, and let the sentence in question be an explicitly universally
+quantified Datalog rule.</i></p>
+<ul><li><i>&#8872;<sub>M</sub> distinct(t<sub>1</sub>, t<sub>2</sub>) <b>if and only if t<sub>1</sub> and t<sub>2</sub> are not the same term, syntactically.</b></i></li>
+    <li><i>&#8872;<sub>M</sub> p(t<sub>1</sub>, . . . , t<sub>n</sub>) if and only if p(t<sub>1</sub>, . . . , t<sub>n</sub>) &isin; M</i></li>
+    <li><i>&#8872;<sub>M</sub> &not;&#981; if and only if &#8877;<sub>M</sub> &#981;</i></li>
+    <li><i>&#8872;<sub>M</sub> &#981;<sub>1</sub> &and; &middot; &middot; &middot; &and; &#981;<sub>n</sub> if and only if &#8872;<sub>M</sub> &#981;<sub>i</sub> for every i.</i></li>
+    <li><i>&#8872;<sub>M</sub> h &lArr; b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub> if and only if either &#8877;<sub>M</sub> b<sub>1</sub> &and; &middot; &middot; &middot; &and; b<sub>n</sub> or &#8872;<sub>M</sub> h or both.</i></li>
+    <li><i>&#8872;<sub>M</sub> &forall;X.&#981;(X) if and only if &#8872;<sub>M</sub> &#981;(t) for every ground term t.</i></li>
+</ul>
+
+<p>The rest of this section gives a brief overview of Datalog written in KIF, the official language of GDL.</p>
+<p>In KIF, variables begin with a ?. All operators are written in prefix notation. Every term and every
+sentence is a Lisp S-expression. The arity and type (relation, function, object) of constants are determined
+by context. For example,</p>
+<ul><li><i>X</i> is written <code>?x</code></li>
+    <li><i>f(a, X, g(h(c, Y ), e))</i> is written <code>(f a ?x (g (h c ?y) e))</code></li>
+    <li><i>true(cell(1, 1, X))</i> is written <code>(true (cell 1 1 ?x))</code></li>
+    <li><i>&not;true(cell(1, 1, X))</i> is written <code>(not (true (cell 1 1 ?x)))</code></li>
+    <li><i>p(X) &lArr; q(X) &and; &not;r(X)</i> is written <code>(<= (p ?x) (q ?x) (not (r ?x)))</code></li>
+</ul>
+
+<h2>6 Defined Relations in GDL</h2>
+
+<p>The Game Description Language distinguishes the following set of relations: <i>role, init, true, does, next, legal,
+goal,</i> and <i>terminal</i>, in addition to <i>distinct</i>, the semantics of which are detailed in section 5.3. These relations
+provide the correspondence between a GDL game description and the mechanics of the game world.</p>
+
+<p><b>Running Example: Tic-Tac-Toe</b></p>
+
+<p>To illustrate the constructs of the game description language, we will use a simple familiar example, the
+game of Tic-Tac-Toe. The states of the Tic-Tac-Toe environment consist of a 3 x 3 grid where each cell in
+the grid is either blank or marked with an <code>x</code> or <code>o</code>. In the initial state, the cells are blank, and on each turn,
+the player with control makes their move by indicating which grid cell to mark.</p>
+
+<h3>6.1 Players: the <i>role</i> relation</h3>
+
+<p>The game description defines the players of the game through the <i>role</i> relation. In Tic Tac Toe, the complete
+<i>role</i> relation is:</p>
+<pre>(role x)
+(role o)
+</pre>
+<p>telling us that the game has two players, referred to in the axioms as <code>x</code> and <code>o</code>.</p>
+
+<h3>6.2 Game State: the <i>true</i> relation</h3>
+
+<p>The current state of a game is represented by facts that take the form of ground functional terms in relational
+logic. The game description states which facts are true in the initial step of the game, and the axioms indicate
+how these facts change between game steps. In Tic-Tac-Toe, the ground term</p>
+<pre>(control x)</pre>
+<p>is built from the function constant <i>control</i>, which is used in this turn-taking game to indicate whether it is
+a particular player's turn in the current state, and the object constant <code>x</code>, which is a name of a player in
+the game. The axioms refer to certain such facts holding in the current state of the game through the <i>true</i>
+relation: <i>true(fact)</i>. In Tic-Tac-Toe, the atomic sentences</p>
+<pre>(true (control x))
+(true (cell 2 2 b))</pre>
+<p>indicate that in the current state, the center cell of the grid (at location 2,2) is blank (<code>b</code>), and the <code>x</code> player
+has control.</p>
+
+<h3>6.3 Initial State: the <i>init</i> relation</h3>
+
+<p>The <i>init</i> predicate is an analogue to <i>true</i> for the initial state of the game, and is contained in the game
+description to provide a starting point for the game. In the initial state of a Tic-Tac-Toe game, all cells are
+blank, and the <code>x</code> player has control:</p>
+
+<pre>(init (cell 1 1 b))
+(init (cell 1 2 b))
+(init (cell 1 3 b))
+(init (cell 2 1 b))
+(init (cell 2 2 b))
+(init (cell 2 3 b))
+(init (cell 3 1 b))
+(init (cell 3 2 b))
+(init (cell 3 3 b))
+(init (control x))</pre>
+
+<h3>6.4 Game State Update: the <i>next</i> relation</h3>
+
+<p>The <i>next</i> relation is an analogue to <i>true</i>, referring to facts that will hold in the next (as opposed to current)
+state of the game. For example, in Tic-Tac-Toe, control alternates between the two roles:</p>
+
+<pre>(<= (next (control x))
+    (true (control o)))
+
+(<= (next (control o))
+    (true (control x)))</pre>
+
+<h3>6.5 Legal Moves: the <i>legal</i> relation</h3>
+
+<p>The rules of a game restrict the moves played in the game by designating as legal certain moves in certain
+states. The <i>legal</i> relation: <i>legal(player,move)</i> holds for player-move combinations allowed by the game rules.
+In Tic-Tac-Toe, an alternating turn game, players can only mark cells when it is their turn in the current
+state (and only when those cells are blank), and must otherwise wait (perform an action called "noop").</p>
+
+<pre>(<= (legal ?player (mark ?x ?y))
+    (true (cell ?x ?y b))
+    (true (control ?player)))
+
+(<= (legal x noop)
+    (true (control o)))
+
+(<= (legal o noop)
+    (true (control x)))</pre>
+
+<h3>6.6 Moves: the <i>does</i> relation</h3>
+
+<p>The <i>does</i> relation: <i>does(player, move)</i> indicates the moves actually made by players in a particular step of
+the game. The axioms reference the <i>does</i> relation in rules that govern state update. In Tic-Tac-Toe, the
+rule:</p>
+
+<pre>(<= (next (cell ?x ?y ?player))
+    (does ?player (mark ?x ?y)))</pre>
+
+<p>states that when the <code>?player</code> player performs the <i>mark</i> move on a previously blank grid location, the grid
+location will be marked with a <code>?player</code> in the next step. In addition, frame axioms define what remains
+unchanged given a particular player action. In Tic-Tac-Toe, we have:</p>
+
+<pre>(<= (next (cell ?x ?y b))
+    (does ?player (mark ?m ?n))
+    (true (cell ?x ?y b))
+    (distinctCell ?x ?y ?m ?n))
+
+(<= (distinctCell ?x ?y ?m ?n)
+    (distinct ?x ?m))
+
+(<= (distinctCell ?x ?y ?m ?n)
+    (distinct ?y ?n))</pre>
+
+<p>which indicates that a blank cell remains blank if a player marks a different cell.</p>
+
+<h3>6.7 Prior Moves</h3>
+
+<p>In General Game Playing with complete information games, before making a move, each player in a game
+needs to be notified of the moves made by the other players on the previous step of the game. With this
+information, each player can compute the current state of the game (the complete <i>true</i> relation). This
+information takes the form of ground atomic <i>does</i> statements. In Tic-Tac-Toe, if the <code>x</code> player marks the
+center of the grid, while the <code>o</code> player performs a noop, the prior move information</p>
+<pre>(does x (mark 2 2))
+(does o noop)</pre>
+<p>when added to the previous state of the game will enable computation of the new game state. In the GGP
+setting, the GM transmits this information to the players after each step of the game.</p>
+
+<h3>6.8 Goal States: the <i>goal</i> relation</h3>
+
+<p>The game description includes rules that describe goals for the game’s players in terms of the game state.
+The goals of two players may be inverses (as in zero-sum games), asymmetric, or even complementary (as in
+cooperative games). The rules defining goals are used by the GM to determine the value of the final state
+of the game to the various players. Goals may be binary valued &ndash; either a goal is satisfied in a step (score
+= 100) or it is not (score = 0) &ndash; or the goal relation may define different scores for players given different
+conditions on propositions, allowing integer goal values between 0 and 100. In Tic-Tac-Toe, we find the
+following goal rule (among others), stating that the role <code>?player</code> achieves a maximal goal value for making
+a line of <code>?player</code>s:</p>
+
+<pre>(<= (goal ?player 100)
+    (line ?player))</pre>
+
+<p>where the <i>line</i> relation is defined elsewhere in the game's axioms to hold for a player who has a marked row,
+column, or diagonal of cells on the board.</p>
+
+<h3>6.9 Terminal States: the <i>terminal</i> relation</h3>
+
+<p>The game description includes a definition of the set of terminal states in terms of facts true in those states.
+The nullary <i>terminal</i> relation: <i>terminal</i> is used in the axioms to define these termination conditions for a
+game state. In Tic-Tac-Toe, the game terminates when a player has made a line of marks, or after the board
+is full:</p>
+
+<pre>(<= terminal
+    (role ?player)
+    (line ?player))
+
+(<= terminal
+    (not open))</pre>
+
+<h3>6.10 Restrictions on GDL Relations</h3>
+
+<p>In order to ensure that GDL game descriptions correspond to game worlds (and state machines) in such a
+way that the reserved relations match their intended semantics (given above), we need to place restrictions
+on how these relations appear in Datalog rules in a game description. For example, if a game description
+contained the rule</p>
+
+<pre>(<= (role p) (true q))</pre>
+
+<p>this would seem to say that "if <code>q</code> is true in the current state, then <code>p</code> is a player in the game." This is a rule
+we would not want to include in a game description &ndash; the names and number of players in a game is fixed,
+and is not a condition of the current state. We add the following additional syntactic restrictions on Datalog
+rules in GDL.</p>
+
+<p><b>Definition 20</b> (GDL Restrictions). <i>Let &Delta; be a GDL game description, and let G be the dependency graph
+for &Delta;. Then each of the following conditions must hold of &Delta;:</i></p>
+<ul><li><i>The <code>role</code> relation only appears in ground atomic sentences (as the head of a Datalog rule with no
+body).</i></li>
+    <li><i>The <code>init</code> relation only appears in the heads of Datalog rules (not in the bodies), and in G, the </i>init<i>
+node is not in the same connected component as </i>true, does, next, legal, goal,<i> or </i>terminal<i>.</i></li>
+    <li><i>The <code>true</code> relation only appears in the bodies of Datalog rules (not in the heads).</i></li>
+    <li><i>The <code>next</code> relation only appears in the heads of Datalog rules.</i></li>
+    <li><i>The <code>does</code> relation only appears in the bodies of Datalog rules, and in G, there are no paths between the
+</i>does<i> node and any of </i>legal, goal,<i> or </i>terminal.</li>
+</ul>
+
+<h3>6.11 Producing Well-Formed Games</h3>
+
+<p>The preceding definitions constrain GDL to produce game descriptions for which players can compute their
+legal moves and compute the next state given the moves of all players. However, there are additional
+constraints required to limit the scope of GDL to well-formed games.</p>
+
+<p><b>Definition 21</b> (Termination). <i>A game description in GDL </i>terminates<i> if all infinite sequences of legal moves
+from the initial state of the game reach a terminal state after a finite number of steps.</i></p>
+
+<p><b>Definition 22</b> (Playability). <i>A game description in GDL is </i>playable<i> if and only if every role has at least
+one legal move in every non-terminal state reachable from the initial state.</i></p>
+
+<p><b>Definition 23</b> (Monotonicity). <i>A game description in GDL is </i>monotonic<i> if and only if every role has
+exactly one goal value in every state reachable from the initial state, and goal values never decrease.</i></p>
+
+<p><b>Definition 24</b> (Winnability). <i>A game description in GDL is </i>strongly winnable<i> if and only if, for some
+role, there is a sequence of individual moves of that role that leads to a terminal state of the game where that
+role's goal value is maximal. A game description in GDL is </i>weakly winnable<i> if and only if, for every role,
+there is a sequence of joint moves of all roles that leads to a terminal state where that role's goal value is
+maximal.</i></p>
+
+<p><b>Definition 25</b> (Well-formed Games). <i>A game description in GDL is </i>well-formed<i> if it terminates, is monotonic,
+and is both playable and weakly winnable.</i></p>
+
+<p>This definition requires that all well-formed single player games be strongly winnable. Clearly, it is possible
+to generate game descriptions in GDL which are not well-formed. Checking game descriptions to see if they
+are well-formed can certainly be done in general by using brute-force methods (expanding the entire game
+graph), and for some games, faster algorithms may exists. Game descriptions used in GGP competitions
+should always be well-formed.</p>
+
+<h2>7 Game Manager</h2>
+
+<p>General game player systems compete in games by communicating with a GM. The GM distributes the
+description of the game to the players, then solicits moves from the players, updating the state of the game
+at each step by performing the sequence of state machine operations outlined above. The entire sequence of
+game steps can be completely computed by the GM, given the players' moves, and upon reaching a terminal
+state, the GM stops the game and records the goal values achieved by the players. This process (a complete
+run of a game, with GGP players submitting moves) is called a match.</p>
+
+<h3>7.1 Roles</h3>
+
+<p>The binding of game roles to particular GGP players in a match is performed by the GM by passing an
+additional argument to along with the game description. Each GGP player is assigned a single role in a
+match.</p>
+
+<h3>7.2 Illegal Moves</h3>
+
+<p>The <i>legal</i> relation allows the GM to determine whether the moves submitted by players are legal with respect
+to the rules of the game. If a player submits an illegal move (or fails to submit a move at all), the GM will
+substitute a random legal move for that player on that turn. In subsequent turns, the GM will again request
+moves from the player, and the player should be able to resume submitting their own legal moves.</p>
+
+<h3>7.3 Clocks</h3>
+
+<p>To ensure that game play progresses in a fair and expeditious manner, the GM maintains a play clock to
+track the move responses of each of the players. For any given game, an integer is defined as the <i>playclock</i>
+for all players, for each move of the game. That is, if the playclock is set to 20 for a particular game, game
+players have 20 seconds after receiving a request to reply to the GM with their move for that step. A failure
+to reply with a legal move before the clock expires will carry the same results as making an illegal move,
+described above. Players must maintain their own internal clocks, since they are only informed once of the
+move clock setting for the game, and are not warned or given any clock information during game play.</p>
+
+<p>In addition, when the game commences, and the game description is first sent to the players, an initial
+<i>startclock</i> (separate from the playclock) gives players time to deliberate before the first turn begins. When
+<i>startclock</i> seconds have passed since sending the game descriptions, the GM will request the first move from
+all players. Both of these clock settings are determined by the game administrator when initiating a match.</p>
+
+<h3>7.4 Game Manager and Gamemaster</h3>
+
+<p>The Game Manager plays the central role in the entire General Game Playing web framework (Gamemaster).
+Gamemaster holds registration information for remotely connecting game players, stores game descriptions,
+maintains game and player histories, and facilitates the TCP/IP communication between the GM and the
+game players.</p>
+
+<p>Figures 1 through 3 illustrate Gamemaster architecture, including the communication model for game
+play and the sequence of messages exchanged between the GM and the game players during game execution.</p>
+
+<center><img src="figure1.png"/></center>
+<center>Figure 1: Match Administration and Initialization</center>
+<center><img src="figure2.png"/></center>
+<center>Figure 2: Requesting and Submitting Moves</center>
+<center><img src="figure3.png"/></center>
+<center>Figure 3: Update and Termination</center>
+
+<h2>8 Communication Language</h2>
+
+<p>Communication between game players and the Game Manager takes place through HTTP connections. The
+communication model assumes a player running on a host listening on a particular port. HTTP messages
+sent to players have the standard HTTP header, with content type text/acl. In the case of games played
+through the GGP website, the sender specified in the header will always be "Gamemaster," and the receiver
+will be the remote player name as registered on the Gamemaster system.</p>
+<p>The body of the HTTP message consists one of several commands with sets of KIF sentences as arguments.</p>
+
+<h3>8.1 START Command</h3>
+
+<p>The <code>START</code> command is used to initialize game play. The command takes three arguments, providing the
+player with their role in the game, the game description, and the value of the move clock:</p>
+
+<pre>(START &lt;MATCHID&gt; &lt;ROLE&gt; &lt;DESCRIPTION&gt; &lt;STARTCLOCK&gt; &lt;PLAYCLOCK&gt;)</pre>
+
+<p><code>&lt;MATCHID&gt;</code> is a unique identifier of the match being played, since a particular player (communicating with
+the GM from the same host and port) could play more than one match at a time. All subsequent messages
+exchanged for this match will contain the same ID.</p>
+<p><code>&lt;ROLE&gt;</code> is a single element of the <i>role</i> relation of the game description, and this is the role assigned to this
+player for this match.</p>
+<p><code>&lt;DESCRIPTION&gt;</code> is a set of KIF sentences, enclosed by an outer set of parentheses.</p>
+<p><code>&lt;STARTCLOCK&gt;</code> and <code>&lt;PLAYCLOCK&gt;</code> are integers. A message with this command is sent once by the GM to
+each player to initialize the game.</p>
+
+<h3>8.2 PLAY Command</h3>
+
+<p>The <code>PLAY</code> command is used to initiate each step of the game. The command takes two arguments: the first
+the match ID, the second is is a list of the actions taken by all players on the previous step:</p>
+
+<pre>(PLAY &lt;MATCHID&gt; (&lt;A1&gt; &lt;A2&gt; ... &lt;An&gt;))</pre>
+
+<p>Each <code>&lt;An&gt;</code> is an action taken by one of the players of the game in the previous step. The ordering of
+actions corresponds to the ordering of roles given in the game description axioms. For example, if the
+game description contained <code>role(white) role(black)</code> in that order, then <code>(EAST SOUTH)</code> would inform the
+players that the white player moved east on the previous step, while the black player moved south (this
+game, unlike Tic-Tac-Toe, has simultaneous moves).</p>
+
+<h3>8.3 STOP Command</h3>
+
+<p>The <code>STOP</code> command is used to notify the end of the game. The command is similar to the <code>PLAY</code> command
+in structure:</p>
+
+<pre>(STOP &lt;MATCHID&gt; (&lt;A1&gt; &lt;A2&gt; . . . &lt;An&gt;))</pre>
+
+<p>This command, like the <code>PLAY</code> command, contains the actions from the previous step, so that players can
+completely compute the next step of the game, in which the <code>terminal</code> condition has been met. A message
+with this command is sent once by the GM to each player to terminate the game.</p>
+
+<h3>8.4 Player Replies</h3>
+
+<p>After receiving a <code>START</code> message, each player should send an HTTP reply with the body</p>
+<pre>READY</pre>
+<p>before <i>startclock</i> seconds have elapsed. However, when the startclock has expired, the Game Manager will
+send <code>PLAY</code> messages to all players regardless of whether they have replied. If all players have responded
+with</p>
+<pre>READY</pre>
+<p>before this time is up, the Game Manager will begin the game immediately, sending the first <code>PLAY</code> messages.</p>
+
+<p>The <code>PLAY</code> command expects an HTTP reply with a body containing the player's selected move:</p>
+<pre>&lt;ACTION&gt;</pre>
+<p>For example, in a game of Tic-Tac-Toe, a player might reply with</p>
+<pre>(MARK 2 2)</pre>
+<p>In response to a <code>STOP</code> message, a game player should reply with</p>
+<pre>DONE</pre>
+<p>Appendix B contains some additional detail on the format of the HTTP messages and an extended example.</p>
+
+<h2>A &mdash; Full Tic-Tac-Toe Game Description in prefix KIF</h2>
+
+<p>Note that lines beginning with ; (semicolon) are comments.</p>
+<pre>;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Tictactoe
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Roles
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (role x)
+  (role o)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Initial State
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (init (cell 1 1 b))
+  (init (cell 1 2 b))
+  (init (cell 1 3 b))
+  (init (cell 2 1 b))
+  (init (cell 2 2 b))
+  (init (cell 2 3 b))
+  (init (cell 3 1 b))
+  (init (cell 3 2 b))
+  (init (cell 3 3 b))
+  (init (control x))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Dynamic Components
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Cell
+
+  (<= (next (cell ?x ?y ?player))
+      (does ?player (mark ?x ?y)))
+
+  (<= (next (cell ?x ?y ?mark))
+      (true (cell ?x ?y ?mark))
+      (does ?player (mark ?m ?n))
+      (distinctCell ?x ?y ?m ?n))
+
+;; Control
+
+  (<= (next (control x))
+      (true (control o)))
+
+  (<= (next (control o))
+      (true (control x)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Views
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= (row ?x ?player)
+      (true (cell ?x 1 ?player))
+      (true (cell ?x 2 ?player))
+      (true (cell ?x 3 ?player)))
+
+  (<= (column ?y ?player)
+      (true (cell 1 ?y ?player))
+      (true (cell 2 ?y ?player))
+      (true (cell 3 ?y ?player)))
+
+  (<= (diagonal ?player)
+      (true (cell 1 1 ?player))
+      (true (cell 2 2 ?player))
+      (true (cell 3 3 ?player)))
+
+  (<= (diagonal ?player)
+      (true (cell 1 3 ?player))
+      (true (cell 2 2 ?player))
+      (true (cell 3 1 ?player)))
+
+  (<= (line ?player) (row ?x ?player))
+  (<= (line ?player) (column ?y ?player))
+  (<= (line ?player) (diagonal ?player))
+
+  (<= open (true (cell ?x ?y b)))
+
+  (<= (distinctCell ?x ?y ?m ?n) (distinct ?x ?m))
+  (<= (distinctCell ?x ?y ?m ?n) (distinct ?y ?n))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Legal Moves
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= (legal ?player (mark ?x ?y))
+      (true (cell ?x ?y b))
+      (true (control ?player)))
+
+  (<= (legal x noop)
+      (true (control o)))
+
+  (<= (legal o noop)
+      (true (control x)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Goals
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= (goal ?player 100)
+      (line ?player))
+
+  (<= (goal ?player 50)
+      (not (line x))
+      (not (line o))
+      (not open))
+
+  (<= (goal ?player1 0)
+      (line ?player2)
+      (distinct ?player1 ?player2))
+
+  (<= (goal ?player 0)
+      (not (line x))
+      (not (line o))
+      open)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Terminal
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= terminal
+      (line ?player))
+
+  (<= terminal
+      (not open))</pre>
+
+<h2>B &mdash; A Complete Match of Tic-Tac-Toe</h2>
+
+<pre>POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 1554
+
+(START MATCH.3316980891 X
+(ROLE X) (ROLE O) (INIT (CELL 1 1 B)) (INIT (CELL 1 2 B)) (INIT (CELL 1 3 B))
+(INIT (CELL 2 1 B)) (INIT (CELL 2 2 B)) (INIT (CELL 2 3 B)) (INIT (CELL 3 1 B))
+(INIT (CELL 3 2 B)) (INIT (CELL 3 3 B)) (INIT (CONTROL X))
+(<= (NEXT (CELL ?X ?Y ?PLAYER)) (DOES ?PLAYER (MARK ?X ?Y)))
+(<= (NEXT (CELL ?X ?Y ?MARK)) (TRUE (CELL ?X ?Y ?MARK)) (DOES ?PLAYER (MARK ?M ?N))
+(DISTINCTCELL ?X ?Y ?M ?N)) (<= (NEXT (CONTROL X)) (TRUE (CONTROL O)))
+(<= (NEXT (CONTROL O)) (TRUE (CONTROL X))) (<= (ROW ?X ?PLAYER) (TRUE (CELL ?X 1 ?PLAYER))
+(TRUE (CELL ?X 2 ?PLAYER)) (TRUE (CELL ?X 3 ?PLAYER))) (<= (COLUMN ?Y ?PLAYER)
+(TRUE (CELL 1 ?Y ?PLAYER)) (TRUE (CELL 2 ?Y ?PLAYER)) (TRUE (CELL 3 ?Y ?PLAYER)))
+(<= (DIAGONAL ?PLAYER) (TRUE (CELL 1 1 ?PLAYER)) (TRUE (CELL 2 2 ?PLAYER))
+(TRUE (CELL 3 3 ?PLAYER))) (<= (DIAGONAL ?PLAYER) (TRUE (CELL 1 3 ?PLAYER))
+(TRUE (CELL 2 2 ?PLAYER)) (TRUE (CELL 3 1 ?PLAYER))) (<= (LINE ?PLAYER) (ROW ?X ?PLAYER))
+(<= (LINE ?PLAYER) (COLUMN ?Y ?PLAYER)) (<= (LINE ?PLAYER) (DIAGONAL ?PLAYER))
+(<= OPEN (TRUE (CELL ?X ?Y B))) (<= (DISTINCTCELL ?X ?Y ?M ?N) (DISTINCT ?X ?M))
+(<= (DISTINCTCELL ?X ?Y ?M ?N) (DISTINCT ?Y ?N)) (<= (LEGAL ?PLAYER (MARK ?X ?Y))
+(TRUE (CELL ?X ?Y B)) (TRUE (CONTROL ?PLAYER))) (<= (LEGAL ?PLAYER NOOP)
+(NOT (TRUE (CONTROL ?PLAYER)))) (<= (GOAL ?PLAYER 100) (LINE ?PLAYER))
+(<= (GOAL ?PLAYER 50) (NOT (LINE X)) (NOT (LINE O)) (NOT OPEN)) (<= (GOAL ?PLAYER1 0)
+(LINE ?PLAYER2) (DISTINCT ?PLAYER1 ?PLAYER2)) (<= (GOAL ?PLAYER 0) (NOT (LINE X))
+(NOT (LINE O)) OPEN) (<= TERMINAL (LINE ?PLAYER)) (<= TERMINAL (NOT OPEN))
+30 30)
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 5
+
+READY
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 27
+
+(PLAY MATCH.3316980891 NIL)
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 10
+
+(MARK 3 3)
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 40
+
+(PLAY MATCH.3316980891 ((MARK 3 3) NOOP))
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 4
+
+NOOP
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 40
+
+(PLAY MATCH.3316980891 (NOOP (MARK 1 3)))
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 10
+
+(MARK 2 2)
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 40
+
+(PLAY MATCH.3316980891 ((MARK 2 2) NOOP))
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 4
+
+NOOP
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 40
+
+(PLAY MATCH.3316980891 (NOOP (MARK 1 2)))
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 10
+
+(MARK 1 1)
+
+POST / HTTP/1.0
+Accept: text/delim
+Sender: GAMEMASTER
+Receiver: GAMEPLAYER
+Content-type: text/acl
+Content-length: 40
+
+(STOP MATCH.3316980891 ((MARK 1 1) NOOP))
+
+HTTP/1.0 200 OK
+Content-type: text/acl
+Content-length: 4
+
+DONE</pre>
+
+</body>
+</html>

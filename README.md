@@ -1,0 +1,1 @@
+A specification of the Game Description Language for General Game Playing.
