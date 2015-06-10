@@ -526,8 +526,8 @@ from the initial state of the game reach a terminal state after a finite number 
 <p><b>Definition 22</b> (Playability). <i>A game description in GDL is </i>playable<i> if and only if every role has at least
 one legal move in every non-terminal state reachable from the initial state.</i></p>
 
-<p><b>Definition 23</b> (Monotonicity). <i>A game description in GDL is </i>monotonic<i> if and only if every role has
-exactly one goal value in every state reachable from the initial state, and goal values never decrease.</i></p>
+<p><b>Definition 23</b> (Well-defined goals). <i>A game description in GDL has </i>well-defined goals<i> if and only if every role has
+exactly one goal value in every terminal state reachable from the initial state.</i></p>
 
 <p><b>Definition 24</b> (Winnability). <i>A game description in GDL is </i>strongly winnable<i> if and only if, for some
 role, there is a sequence of individual moves of that role that leads to a terminal state of the game where that
@@ -535,7 +535,7 @@ role's goal value is maximal. A game description in GDL is </i>weakly winnable<i
 there is a sequence of joint moves of all roles that leads to a terminal state where that role's goal value is
 maximal.</i></p>
 
-<p><b>Definition 25</b> (Well-formed Games). <i>A game description in GDL is </i>well-formed<i> if it terminates, is monotonic,
+<p><b>Definition 25</b> (Well-formed Games). <i>A game description in GDL is </i>well-formed<i> if it terminates, has well-defined goals,
 and is both playable and weakly winnable.</i></p>
 
 <p>This definition requires that all well-formed single player games be strongly winnable. Clearly, it is possible
