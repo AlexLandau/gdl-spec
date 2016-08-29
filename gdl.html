@@ -340,7 +340,7 @@ by context. For example,</p>
 <h2>6 Defined Relations in GDL</h2>
 
 <p>The Game Description Language distinguishes the following set of relations: <i>role, init, true, does, next, legal,
-goal,</i> and <i>terminal</i>, in addition to <i>distinct</i>, the semantics of which are detailed in section 5.3. These relations
+goal, terminal,</i> and <i>gdl</i>, in addition to <i>distinct</i>, the semantics of which are detailed in section 5.3. These relations
 provide the correspondence between a GDL game description and the mechanics of the game world.</p>
 
 <p><b>Running Example: Tic-Tac-Toe</b></p>
@@ -488,7 +488,19 @@ is full:</p>
 (<= terminal
     (not open))</pre>
 
-<h3>6.10 Restrictions on GDL Relations</h3>
+<h3>6.10 Language Variants: the <i>gdl</i> relation</h3>
+
+<p>Some variants of GDL exist that extend or modify the rules provided here. A game description can specify that one of these 
+variants is in effect by including a unary <i>gdl</i> relation. The single argument to the relation specifies which
+variant is in use. Multiple <i>gdl</i> relations may be used in combination if they do not conflict.</p>
+
+<p>Section 9 describes the effects of the variants recognized by this specification.</p>
+
+<p>A game server should not run matches of game descriptions with <i>gdl</i> relations for variants it does not 
+recognize, as these may be understood differently by the players. Game servers may also communicate with players 
+to determine which variants the players support, though this is not currently covered by this specification.</p>
+
+<h3>6.11 Restrictions on GDL Relations</h3>
 
 <p>In order to ensure that GDL game descriptions correspond to game worlds (and state machines) in such a
 way that the reserved relations match their intended semantics (given above), we need to place restrictions
@@ -504,7 +516,7 @@ rules in GDL.</p>
 
 <p><b>Definition 20</b> (GDL Restrictions). <i>Let &Delta; be a GDL game description, and let G be the dependency graph
 for &Delta;. Then each of the following conditions must hold of &Delta;:</i></p>
-<ul><li><i>The <code>role</code> relation only appears in ground atomic sentences (as the head of a Datalog rule with no
+<ul><li><i>The <code>role</code> and <code>gdl</code> relations only appear in ground atomic sentences (as the head of a Datalog rule with no
 body).</i></li>
     <li><i>The <code>init</code> relation only appears in the heads of Datalog rules (not in the bodies), and in G, the </i>init<i>
 node is not in the same connected component as </i>true, does, next, legal, goal,<i> or </i>terminal<i>.</i></li>
@@ -514,7 +526,7 @@ node is not in the same connected component as </i>true, does, next, legal, goal
 </i>does<i> node and any of </i>legal, goal,<i> or </i>terminal.</li>
 </ul>
 
-<h3>6.11 Producing Well-Formed Games</h3>
+<h3>6.12 Producing Well-Formed Games</h3>
 
 <p>The preceding definitions constrain GDL to produce game descriptions for which players can compute their
 legal moves and compute the next state given the moves of all players. However, there are additional
@@ -664,6 +676,20 @@ with</p>
 <p>In response to a <code>STOP</code> message, a game player should reply with</p>
 <pre>DONE</pre>
 <p>Appendix B contains some additional detail on the format of the HTTP messages and an extended example.</p>
+
+<h2>9 GDL Variants</h2>
+
+<h3>9.1 Random Player</h3>
+
+<p>When the relation <code>(gdl random)</code> is included in the game description, the following additional rules apply:</p>
+
+<ul>
+<li>One of the roles must be named <code>random</code>. There must be more than one role.</li>
+<li>The game server is expected to control the actions of the <code>random</code> role rather than assigning them to a player.</li>
+<li>The game server must guarantee that each turn, the move made by the <code>random</code> role is chosen uniformly at random 
+from among its legal moves for that turn.</li>
+<li>The game description should specify that the <code>random</code> role unconditionally has a goal value of 100.</li>
+</ul>
 
 <h2>A &mdash; Full Tic-Tac-Toe Game Description in prefix KIF</h2>
 
